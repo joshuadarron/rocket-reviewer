@@ -1,0 +1,47 @@
+name: "RocketRide PR Reviewer"
+description: "Multi-agent AI code review using Claude, GPT, and Gemini via RocketRide"
+author: "Joshua Phillips"
+
+inputs:
+  openai_api_key:
+    description: "OpenAI API key for GPT reviewer agent"
+    required: true
+  anthropic_api_key:
+    description: "Anthropic API key for Claude reviewer and aggregator"
+    required: true
+  google_api_key:
+    description: "Google AI API key for Gemini reviewer agent"
+    required: true
+  claude_app_id:
+    description: "GitHub App ID for claude-reviewer[bot]"
+    required: true
+  claude_app_private_key:
+    description: "GitHub App private key for claude-reviewer[bot]"
+    required: true
+  gpt_app_id:
+    description: "GitHub App ID for gpt-reviewer[bot]"
+    required: true
+  gpt_app_private_key:
+    description: "GitHub App private key for gpt-reviewer[bot]"
+    required: true
+  gemini_app_id:
+    description: "GitHub App ID for gemini-reviewer[bot]"
+    required: true
+  gemini_app_private_key:
+    description: "GitHub App private key for gemini-reviewer[bot]"
+    required: true
+  review_context:
+    description: "Review scope: 'full' (include file context) or 'diff' (diff only)"
+    required: false
+    default: "full"
+  config_path:
+    description: "Path to .rocketride-review.yml config file"
+    required: false
+    default: ".rocketride-review.yml"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run RocketRide Reviewer
+      shell: bash
+      run: echo "TODO - Wire up src/main.py invocation"

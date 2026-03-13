@@ -1,0 +1,87 @@
+---
+title: "rocketride-reviewer: Technical Architecture"
+---
+
+%% ============================================================
+%% 1. END-TO-END SYSTEM FLOW
+%% ============================================================
+
+flowchart TB
+    subgraph trigger["GitHub Event Layer"]
+        PR_OPEN["PR Opened<br/>(targeting main)"]
+        PR_UPDATE["PR Updated<br/>(new commits)"]
+        DEV_REPLY["Developer Replies<br/>(to agent comment)"]
+    end
+
+    subgraph gate["Gate Check (src/main.py)"]
+        direction TB
+        G1{"Target branch<br/>== main?"}
+        G2{"Event type?"}
+        G3{"Comment author<br/>is a bot?"}
+        EXIT["Exit (code 0)<br/>No action"]
+    end
+
+    subgraph engine_layer["RocketRide Engine (Docker)"]
+        direction TB
+        DOCKER_START["Docker Start<br/>rocketride-engine<br/>Port 5565"]
+        HEALTH["Health Check<br/>localhost:5565"]
+        SDK["Python SDK<br/>async context manager"]
+    end
+
+    subgraph pipelines["RocketRide Pipelines"]
+        direction TB
+        subgraph full_mode["full_review.json"]
+            direction LR
+            INPUT_FULL["Input:<br/>PR Diff +<br/>File Context +<br/>Existing Comments"]
+            subgraph parallel["Parallel Execution"]
+                direction TB
+                CLAUDE_R["Claude<br/>Reviewer Node"]
+                GPT_R["GPT<br/>Reviewer Node"]
+                GEMINI_R["Gemini<br/>Reviewer Node"]
+            end
+            AGG["Claude<br/>Aggregator Node<br/>(dedup only)"]
+            INPUT_FULL --> parallel --> AGG
+        end
+
+        subgraph reply_mode["conversation_reply.json"]
+            direction LR
+            INPUT_REPLY["Input:<br/>Comment Thread +<br/>File Context"]
+            SINGLE["Single Agent<br/>(originating reviewer)"]
+            INPUT_REPLY --> SINGLE
+        end
+    end
+
+    subgraph posting["GitHub Review Posting (src/reviewer.py)"]
+        direction LR
+        subgraph apps["GitHub App Identities"]
+            direction TB
+            BOT_C["claude-reviewer#91;bot#93;"]
+            BOT_G["gpt-reviewer#91;bot#93;"]
+            BOT_GEM["gemini-reviewer#91;bot#93;"]
+        end
+        APPROVAL{"All agents:<br/>0 critical/high?"}
+        APPROVE["Submit: Approve"]
+        REQUEST["Submit: Request Changes<br/>(from flagging agent)"]
+    end
+
+    PR_OPEN --> G1
+    PR_UPDATE --> G1
+    DEV_REPLY --> G3
+
+    G1 -->|No| EXIT
+    G1 -->|Yes| G2
+    G2 -->|PR opened/updated| DOCKER_START
+    G3 -->|Yes, bot| EXIT
+    G3 -->|No, human| G2
+    G2 -->|Comment reply| DOCKER_START
+
+    DOCKER_START --> HEALTH --> SDK
+
+    SDK -->|"PR open/update"| full_mode
+    SDK -->|"Dev reply"| reply_mode
+
+    AGG --> apps
+    SINGLE --> apps
+    apps --> APPROVAL
+    APPROVAL -->|Yes| APPROVE
+    APPROVAL -->|No| REQUEST

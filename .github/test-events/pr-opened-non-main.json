@@ -1,0 +1,36 @@
+{
+  "action": "opened",
+  "number": 2,
+  "pull_request": {
+    "number": 2,
+    "title": "Experimental feature",
+    "body": "Targeting develop, should be skipped by gating.",
+    "state": "open",
+    "user": {
+      "login": "developer",
+      "type": "User"
+    },
+    "base": {
+      "ref": "develop",
+      "sha": "ddd4444444444444444444444444444444444444"
+    },
+    "head": {
+      "ref": "feature/experiment",
+      "sha": "eee5555555555555555555555555555555555555"
+    },
+    "changed_files": 1,
+    "additions": 10,
+    "deletions": 0,
+    "diff_url": "https://api.github.com/repos/test-org/test-repo/pulls/2.diff"
+  },
+  "repository": {
+    "full_name": "test-org/test-repo",
+    "name": "test-repo",
+    "owner": {
+      "login": "test-org"
+    }
+  },
+  "installation": {
+    "id": 12345678
+  }
+}

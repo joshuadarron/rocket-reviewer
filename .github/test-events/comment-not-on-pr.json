@@ -1,0 +1,27 @@
+{
+  "action": "created",
+  "issue": {
+    "number": 5,
+    "title": "Bug report: login page broken",
+    "state": "open"
+  },
+  "comment": {
+    "id": 200,
+    "user": {
+      "login": "developer",
+      "type": "User"
+    },
+    "body": "I can reproduce this on Chrome.",
+    "created_at": "2026-03-13T14:00:00Z"
+  },
+  "repository": {
+    "full_name": "test-org/test-repo",
+    "name": "test-repo",
+    "owner": {
+      "login": "test-org"
+    }
+  },
+  "installation": {
+    "id": 12345678
+  }
+}

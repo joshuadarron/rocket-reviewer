@@ -1,0 +1,36 @@
+{
+  "action": "opened",
+  "number": 1,
+  "pull_request": {
+    "number": 1,
+    "title": "Add user authentication",
+    "body": "Adds JWT-based auth to the API layer.",
+    "state": "open",
+    "user": {
+      "login": "developer",
+      "type": "User"
+    },
+    "base": {
+      "ref": "main",
+      "sha": "aaa1111111111111111111111111111111111111"
+    },
+    "head": {
+      "ref": "feature/add-auth",
+      "sha": "bbb2222222222222222222222222222222222222"
+    },
+    "changed_files": 3,
+    "additions": 45,
+    "deletions": 2,
+    "diff_url": "https://api.github.com/repos/test-org/test-repo/pulls/1.diff"
+  },
+  "repository": {
+    "full_name": "test-org/test-repo",
+    "name": "test-repo",
+    "owner": {
+      "login": "test-org"
+    }
+  },
+  "installation": {
+    "id": 12345678
+  }
+}
