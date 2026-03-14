@@ -184,3 +184,31 @@ class TestPostAgentReview:
         mock_client.post_review_comment.assert_not_called()
         call_kwargs = mock_client.submit_review.call_args
         assert call_kwargs.kwargs["status"] == "APPROVE"
+
+    @pytest.mark.asyncio()
+    async def test_explicit_review_status_overrides_computed(self) -> None:
+        """When review_status is provided, it overrides the computed status."""
+        review = AgentReview(
+            reviewer="claude-reviewer",
+            comments=[
+                ReviewComment(file="a.py", line=1, severity=Severity.HIGH, body="Issue")
+            ],
+        )
+        mock_client = AsyncMock()
+
+        # HIGH would normally trigger REQUEST_CHANGES, but we override to COMMENT
+        await post_agent_review(review, mock_client, review_status="COMMENT")
+
+        call_kwargs = mock_client.submit_review.call_args
+        assert call_kwargs.kwargs["status"] == "COMMENT"
+
+    @pytest.mark.asyncio()
+    async def test_review_status_approve_overrides(self) -> None:
+        """Empty review with explicit COMMENT status uses COMMENT, not APPROVE."""
+        review = AgentReview(reviewer="gpt-reviewer", comments=[])
+        mock_client = AsyncMock()
+
+        await post_agent_review(review, mock_client, review_status="COMMENT")
+
+        call_kwargs = mock_client.submit_review.call_args
+        assert call_kwargs.kwargs["status"] == "COMMENT"

@@ -106,6 +106,7 @@ async def post_agent_review(
     review: AgentReview,
     github_client: GitHubClient,
     approval_threshold: str = "high",
+    review_status: str | None = None,
 ) -> None:
     """Post a single agent's review comments and submit review status.
 
@@ -117,6 +118,8 @@ async def post_agent_review(
         review: The agent's review to post.
         github_client: Authenticated GitHub client for this agent's app.
         approval_threshold: Severity threshold for blocking approval.
+        review_status: If provided, overrides the computed review status.
+            Used by cross-agent approval logic to enforce global decisions.
     """
     failed_comments: list[ReviewComment] = []
 
@@ -134,7 +137,10 @@ async def post_agent_review(
             )
             failed_comments.append(comment)
 
-    status = _determine_review_status(review, approval_threshold)
+    if review_status is not None:
+        status = review_status
+    else:
+        status = _determine_review_status(review, approval_threshold)
     summary = _build_review_summary(review, failed_comments)
 
     try:

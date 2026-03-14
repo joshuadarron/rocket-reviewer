@@ -154,3 +154,137 @@ def mock_large_diff() -> str:
 def mock_oversized_pr() -> dict[str, int]:
     """Metadata for a diff exceeding max files/lines thresholds."""
     return {"changed_files": 60, "total_lines": 6000}
+
+
+# --- Phase 2 multi-agent fixtures ---
+
+
+@pytest.fixture()
+def mock_three_agent_reviews() -> list[AgentReview]:
+    """Three agent reviews with some duplicate comments across agents."""
+    return [
+        AgentReview(
+            reviewer="claude-reviewer",
+            comments=[
+                ReviewComment(
+                    file="src/utils.py",
+                    line=11,
+                    severity=Severity.MEDIUM,
+                    body="Consider using a more descriptive variable name here.",
+                ),
+                ReviewComment(
+                    file="src/main.py",
+                    line=3,
+                    severity=Severity.LOW,
+                    body="Unused import: json.",
+                ),
+            ],
+        ),
+        AgentReview(
+            reviewer="gpt-reviewer",
+            comments=[
+                ReviewComment(
+                    file="src/utils.py",
+                    line=12,
+                    severity=Severity.MEDIUM,
+                    body="Consider using a more descriptive variable name.",
+                ),
+                ReviewComment(
+                    file="src/config.py",
+                    line=5,
+                    severity=Severity.NITPICK,
+                    body="Minor style issue with spacing.",
+                ),
+            ],
+        ),
+        AgentReview(
+            reviewer="gemini-reviewer",
+            comments=[
+                ReviewComment(
+                    file="src/utils.py",
+                    line=11,
+                    severity=Severity.MEDIUM,
+                    body="Use a more descriptive variable name for clarity.",
+                ),
+                ReviewComment(
+                    file="tests/test_main.py",
+                    line=20,
+                    severity=Severity.LOW,
+                    body="Test could be more specific about expected output.",
+                ),
+            ],
+        ),
+    ]
+
+
+@pytest.fixture()
+def mock_all_clean_reviews() -> list[AgentReview]:
+    """Three agent reviews with only low/nitpick severity (all should approve)."""
+    return [
+        AgentReview(
+            reviewer="claude-reviewer",
+            comments=[
+                ReviewComment(
+                    file="src/main.py",
+                    line=5,
+                    severity=Severity.LOW,
+                    body="Consider renaming this variable.",
+                ),
+            ],
+        ),
+        AgentReview(
+            reviewer="gpt-reviewer",
+            comments=[
+                ReviewComment(
+                    file="src/main.py",
+                    line=10,
+                    severity=Severity.NITPICK,
+                    body="Minor style suggestion.",
+                ),
+            ],
+        ),
+        AgentReview(
+            reviewer="gemini-reviewer",
+            comments=[],
+        ),
+    ]
+
+
+@pytest.fixture()
+def mock_mixed_severity_reviews() -> list[AgentReview]:
+    """One agent has critical issue, others don't."""
+    return [
+        AgentReview(
+            reviewer="claude-reviewer",
+            comments=[
+                ReviewComment(
+                    file="src/auth.py",
+                    line=15,
+                    severity=Severity.CRITICAL,
+                    body="SQL injection vulnerability — user input not sanitized.",
+                ),
+            ],
+        ),
+        AgentReview(
+            reviewer="gpt-reviewer",
+            comments=[
+                ReviewComment(
+                    file="src/main.py",
+                    line=10,
+                    severity=Severity.LOW,
+                    body="Consider adding a docstring.",
+                ),
+            ],
+        ),
+        AgentReview(
+            reviewer="gemini-reviewer",
+            comments=[
+                ReviewComment(
+                    file="src/utils.py",
+                    line=5,
+                    severity=Severity.MEDIUM,
+                    body="This function could be simplified.",
+                ),
+            ],
+        ),
+    ]

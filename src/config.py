@@ -72,6 +72,31 @@ ENGINE_PORT: int = 5565
 MAX_RETRIES: int = 3
 RETRY_BACKOFF_BASE: float = 1.0
 
+# Agent credentials: maps agent name to env var names for authentication
+AGENT_CREDENTIALS: list[dict[str, str]] = [
+    {
+        "name": "claude-reviewer",
+        "app_id_env": "INPUT_CLAUDE_APP_ID",
+        "key_env": "INPUT_CLAUDE_APP_PRIVATE_KEY",
+        "api_key_env": "INPUT_ANTHROPIC_API_KEY",
+        "api_key_target": "ANTHROPIC_API_KEY",
+    },
+    {
+        "name": "gpt-reviewer",
+        "app_id_env": "INPUT_GPT_APP_ID",
+        "key_env": "INPUT_GPT_APP_PRIVATE_KEY",
+        "api_key_env": "INPUT_OPENAI_API_KEY",
+        "api_key_target": "OPENAI_API_KEY",
+    },
+    {
+        "name": "gemini-reviewer",
+        "app_id_env": "INPUT_GEMINI_APP_ID",
+        "key_env": "INPUT_GEMINI_APP_PRIVATE_KEY",
+        "api_key_env": "INPUT_GOOGLE_API_KEY",
+        "api_key_target": "GOOGLE_API_KEY",
+    },
+]
+
 
 def load_config(repo_root: Path | None = None) -> ReviewConfig:
     """Load configuration from environment variables and optional YAML file.

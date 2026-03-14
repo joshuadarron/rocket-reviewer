@@ -279,6 +279,7 @@ The chunking logic lives in `src/chunker.py`. Key rules:
 - Commit messages are short and imperative: "Add aggregator dedup logic", "Fix agent timeout handling", "Update pipeline schema".
 - No commit message format enforcement tooling in v1, but keep them clean and descriptive.
 - PRs should target `main` and include a description of what changed and why.
+- **Do NOT add `Co-Authored-By` lines to commit messages.** Commits should contain only the message itself.
 
 ---
 

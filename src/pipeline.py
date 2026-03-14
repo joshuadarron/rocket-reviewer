@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from rocketride import RocketRideClient
 
 from src.config import ENGINE_PORT
-from src.errors import AgentError, PipelineError
+from src.errors import PipelineError
 from src.models import AgentReview
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class PipelineRunner:
         diff: str,
         file_context: dict[str, str] | None = None,
         review_mode: str = "full",
-    ) -> list[AgentReview]:
+    ) -> tuple[list[AgentReview], list[str]]:
         """Run the full review pipeline.
 
         Args:
@@ -47,12 +47,11 @@ class PipelineRunner:
             review_mode: Either ``"full"`` or ``"diff"``.
 
         Returns:
-            List of validated AgentReview objects (one per agent node).
+            A tuple of (valid AgentReview objects, names of failed agents).
 
         Raises:
             PipelineError: If the pipeline file is missing or execution
                 fails.
-            AgentError: If an individual agent produces invalid output.
         """
         pipeline_path = self._pipeline_dir / "full_review.json"
         if not pipeline_path.is_file():
@@ -90,20 +89,22 @@ class PipelineRunner:
 
         return self._parse_response(response)
 
-    def _parse_response(self, response: object) -> list[AgentReview]:
+    def _parse_response(self, response: object) -> tuple[list[AgentReview], list[str]]:
         """Parse and validate pipeline response into AgentReview objects.
+
+        Fault-tolerant: malformed agent responses are logged and skipped
+        rather than raising. The agent name is added to the failed list.
 
         Args:
             response: Raw response from the RocketRide SDK.
 
         Returns:
-            List of validated AgentReview objects.
+            A tuple of (valid AgentReview objects, names of failed agents).
 
         Raises:
-            AgentError: If a node's response fails validation.
-            PipelineError: If the response structure is unexpected.
+            PipelineError: If the top-level response structure is
+                unexpected (not a dict or list).
         """
-        # The response may be a single dict (Phase 1) or a list of dicts
         if isinstance(response, dict):
             results = [response]
         elif isinstance(response, list):
@@ -113,21 +114,32 @@ class PipelineRunner:
             raise PipelineError(msg)
 
         reviews: list[AgentReview] = []
+        failed_agents: list[str] = []
+
         for result in results:
             if not isinstance(result, dict):
-                msg = f"Expected dict in pipeline results, got {type(result).__name__}"
-                raise PipelineError(msg)
+                logger.warning(
+                    "Expected dict in pipeline results, got %s — skipping",
+                    type(result).__name__,
+                )
+                failed_agents.append("unknown")
+                continue
 
-            reviewer_name = result.get("reviewer", "unknown")
+            reviewer_name = str(result.get("reviewer", "unknown"))
             try:
                 review = AgentReview(**result)
             except (ValidationError, TypeError) as e:
-                msg = f"Invalid response from agent {reviewer_name}: {e}"
-                raise AgentError(msg, agent_name=str(reviewer_name)) from e
+                logger.warning(
+                    "Invalid response from agent %s: %s — skipping",
+                    reviewer_name,
+                    e,
+                )
+                failed_agents.append(reviewer_name)
+                continue
 
             reviews.append(review)
 
-        return reviews
+        return reviews, failed_agents
 
     async def run_conversation_reply(
         self,
