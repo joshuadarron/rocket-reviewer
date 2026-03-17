@@ -6,13 +6,13 @@ is represented as Pydantic models. Never pass raw dicts across modules.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     """Comment severity levels, ordered from most to least severe."""
 
     CRITICAL = "critical"
@@ -22,7 +22,7 @@ class Severity(str, Enum):
     NITPICK = "nitpick"
 
 
-class CommentStatus(str, Enum):
+class CommentStatus(StrEnum):
     """Whether a comment adds a new issue or resolves an existing one."""
 
     ADD = "add"
