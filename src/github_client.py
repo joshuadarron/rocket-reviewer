@@ -53,11 +53,11 @@ class GitHubClient:
         self._pr_number = pr_number
         self._repo = self._gh.get_repo(repo_name)
         self._pr = self._repo.get_pull(pr_number)
-        auth = self._gh.requester.auth
-        if auth is None:
+        requester_auth = self._gh.requester.auth
+        if requester_auth is None:
             msg = f"GitHub App {app_id} authentication returned no auth token"
             raise ConfigurationError(msg)
-        self._token: str = auth.token
+        self._token: str = requester_auth.token
 
     async def get_pr_diff(self) -> str:
         """Fetch the unified diff for a pull request.
