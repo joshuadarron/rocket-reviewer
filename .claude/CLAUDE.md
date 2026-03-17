@@ -281,6 +281,26 @@ The chunking logic lives in `src/chunker.py`. Key rules:
 - PRs should target `main` and include a description of what changed and why.
 - **Do NOT add `Co-Authored-By` lines to commit messages.** Commits should contain only the message itself.
 
+### Pre-commit checks
+
+Before every commit, run **all four checks** in order. If any check fails, fix the issue, then re-run **that check** until it passes before moving to the next. Only commit once all four pass.
+
+```bash
+# 1. Tests
+pytest tests/ -v
+
+# 2. Lint
+ruff check src/ tests/
+
+# 3. Type check
+mypy src/
+
+# 4. Format check
+black --check src/ tests/
+```
+
+If `black --check` fails, run `black src/ tests/` to auto-format, then re-run the check. For `ruff` auto-fixable errors, run `ruff check --fix src/ tests/`.
+
 ---
 
 ## What Not to Do
