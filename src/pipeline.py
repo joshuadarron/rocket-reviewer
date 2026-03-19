@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -121,29 +122,40 @@ class PipelineRunner:
         if file_context:
             input_data["file_context"] = file_context
 
-        token = None
+        # Write modified pipeline to a temp file for the SDK
+        with tempfile.NamedTemporaryFile(
+            suffix=".pipe.json", delete=False, mode="w", encoding="utf-8"
+        ) as tmp_pipeline:
+            json.dump(pipeline_data, tmp_pipeline)
+        tmp_pipeline_path = Path(tmp_pipeline.name)
         try:
-            async with RocketRideClient(
-                f"http://localhost:{ENGINE_PORT}",
-                auth=ENGINE_AUTH_KEY,
-            ) as client:
-                token = await client.use(pipeline_data)
-                response = await client.send(token, input_data)
-        except PipelineError:
-            raise
-        except Exception as e:
-            msg = f"Pipeline execution failed: {e}"
-            raise PipelineError(msg) from e
+
+            token = None
+            try:
+                async with RocketRideClient(
+                    f"http://localhost:{ENGINE_PORT}",
+                    auth=ENGINE_AUTH_KEY,
+                ) as client:
+                    result = await client.use(filepath=str(tmp_pipeline_path))
+                    token = result["token"]
+                    response = await client.send(token, input_data)
+            except PipelineError:
+                raise
+            except Exception as e:
+                msg = f"Pipeline execution failed: {e}"
+                raise PipelineError(msg) from e
+            finally:
+                if token is not None:
+                    try:
+                        async with RocketRideClient(
+                            f"http://localhost:{ENGINE_PORT}",
+                            auth=ENGINE_AUTH_KEY,
+                        ) as client:
+                            await client.terminate(token)
+                    except Exception:
+                        logger.warning("Failed to terminate pipeline token")
         finally:
-            if token is not None:
-                try:
-                    async with RocketRideClient(
-                        f"http://localhost:{ENGINE_PORT}",
-                        auth=ENGINE_AUTH_KEY,
-                    ) as client:
-                        await client.terminate(token)
-                except Exception:
-                    logger.warning("Failed to terminate pipeline token")
+            tmp_pipeline_path.unlink(missing_ok=True)
 
         return self._parse_response(response)
 
@@ -305,29 +317,42 @@ class PipelineRunner:
         if file_context:
             input_data["file_context"] = file_context
 
-        token = None
+        # Write modified pipeline to a temp file for the SDK
+        with tempfile.NamedTemporaryFile(
+            suffix=".pipe.json", delete=False, mode="w", encoding="utf-8"
+        ) as tmp_pipeline:
+            json.dump(pipeline_data, tmp_pipeline)
+        tmp_pipeline_path = Path(tmp_pipeline.name)
         try:
-            async with RocketRideClient(
-                f"http://localhost:{ENGINE_PORT}",
-                auth=ENGINE_AUTH_KEY,
-            ) as client:
-                token = await client.use(pipeline_data)
-                response = await client.send(token, input_data)
-        except PipelineError:
-            raise
-        except Exception as e:
-            msg = f"Conversation reply pipeline failed: {e}"
-            raise PipelineError(msg) from e
+
+            token = None
+            try:
+                async with RocketRideClient(
+                    f"http://localhost:{ENGINE_PORT}",
+                    auth=ENGINE_AUTH_KEY,
+                ) as client:
+                    result = await client.use(filepath=str(tmp_pipeline_path))
+                    token = result["token"]
+                    response = await client.send(token, input_data)
+            except PipelineError:
+                raise
+            except Exception as e:
+                msg = f"Conversation reply pipeline failed: {e}"
+                raise PipelineError(msg) from e
+            finally:
+                if token is not None:
+                    try:
+                        async with RocketRideClient(
+                            f"http://localhost:{ENGINE_PORT}",
+                            auth=ENGINE_AUTH_KEY,
+                        ) as client:
+                            await client.terminate(token)
+                    except Exception:
+                        logger.warning(
+                            "Failed to terminate conversation pipeline token"
+                        )
         finally:
-            if token is not None:
-                try:
-                    async with RocketRideClient(
-                        f"http://localhost:{ENGINE_PORT}",
-                        auth=ENGINE_AUTH_KEY,
-                    ) as client:
-                        await client.terminate(token)
-                except Exception:
-                    logger.warning("Failed to terminate conversation pipeline token")
+            tmp_pipeline_path.unlink(missing_ok=True)
 
         return self._extract_reply(response)
 

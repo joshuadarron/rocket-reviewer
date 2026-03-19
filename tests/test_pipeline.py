@@ -127,7 +127,7 @@ def valid_lane_response() -> dict[str, object]:
 def _make_mock_client(response: object) -> AsyncMock:
     """Create a mock RocketRideClient that returns the given response."""
     mock_client = AsyncMock()
-    mock_client.use = AsyncMock(return_value="token-123")
+    mock_client.use = AsyncMock(return_value={"token": "token-123"})
     mock_client.send = AsyncMock(return_value=response)
     mock_client.terminate = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -672,7 +672,7 @@ class TestInjectApiKeys:
     async def test_keys_injected_during_full_review(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """API keys are injected into the pipeline dict sent to the SDK."""
+        """API keys are injected into the pipeline file sent to the SDK."""
         monkeypatch.setenv("INPUT_ANTHROPIC_API_KEY", "ant-key")
 
         pipeline_content = _make_pipeline_with_llm("llm_anthropic", "claude-sonnet-4-6")
@@ -683,12 +683,23 @@ class TestInjectApiKeys:
         response = {"reviewer": "claude-reviewer", "comments": []}
         mock_client = _make_mock_client(response)
 
+        # Capture the pipeline content at call time (before temp file cleanup)
+        captured: dict[str, object] = {}
+
+        async def capture_use(*, filepath: str) -> dict[str, str]:
+            captured["pipeline"] = json.loads(
+                Path(filepath).read_text(encoding="utf-8")
+            )
+            return {"token": "token-123"}
+
+        mock_client.use = AsyncMock(side_effect=capture_use)
+
         with patch("src.pipeline.RocketRideClient", return_value=mock_client):
             await runner.run_full_review(diff="diff content")
 
-        # Verify the pipeline dict passed to client.use() has the key injected
-        used_pipeline = mock_client.use.call_args.args[0]
-        apikey = used_pipeline["components"][0]["config"]["claude-sonnet-4-6"]["apikey"]
+        apikey = captured["pipeline"]["components"][0]["config"]["claude-sonnet-4-6"][
+            "apikey"
+        ]
         assert apikey == "ant-key"
 
     @pytest.mark.asyncio()
@@ -712,12 +723,23 @@ class TestInjectApiKeys:
         response = {"reply": "Here is my response."}
         mock_client = _make_mock_client(response)
 
+        captured: dict[str, object] = {}
+
+        async def capture_use(*, filepath: str) -> dict[str, str]:
+            captured["pipeline"] = json.loads(
+                Path(filepath).read_text(encoding="utf-8")
+            )
+            return {"token": "token-123"}
+
+        mock_client.use = AsyncMock(side_effect=capture_use)
+
         with patch("src.pipeline.RocketRideClient", return_value=mock_client):
             await runner.run_conversation_reply(
                 agent_node_id="claude-reviewer",
                 thread_context="context",
             )
 
-        used_pipeline = mock_client.use.call_args.args[0]
-        apikey = used_pipeline["components"][0]["config"]["claude-sonnet-4-6"]["apikey"]
+        apikey = captured["pipeline"]["components"][0]["config"]["claude-sonnet-4-6"][
+            "apikey"
+        ]
         assert apikey == "ant-key"
