@@ -96,6 +96,10 @@ ENGINE_HEALTH_CHECK_INTERVAL: float = 2.0
 ENGINE_HEALTH_CHECK_TIMEOUT: float = 600.0
 ENGINE_PORT: int = 5565
 
+# Pipeline polling settings
+PIPELINE_POLL_INTERVAL: float = 2.0
+PIPELINE_POLL_TIMEOUT: float = 300.0
+
 # Retry settings
 MAX_RETRIES: int = 3
 RETRY_BACKOFF_BASE: float = 1.0

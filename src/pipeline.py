@@ -1,20 +1,22 @@
 """Pipeline execution for full review and conversation modes.
 
 Loads pipeline JSON, starts pipelines via the RocketRide SDK, sends
-diff data, and receives structured agent responses.
+diff data, polls for completion, and receives structured agent responses.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
-import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 from rocketride import RocketRideClient
+from rocketride.types.task import TASK_STATE, TASK_STATUS
 
 from src.config import (
     CONVERSATION_PIPELINE_FILES,
@@ -23,6 +25,8 @@ from src.config import (
     FULL_REVIEW_PIPELINE_FILE,
     LANE_TO_REVIEWER,
     LLM_PROVIDER_API_KEY_ENV,
+    PIPELINE_POLL_INTERVAL,
+    PIPELINE_POLL_TIMEOUT,
 )
 from src.errors import PipelineError
 from src.models import AgentReview
@@ -87,6 +91,110 @@ class PipelineRunner:
 
         return pipeline
 
+    async def _execute_pipeline(
+        self,
+        pipeline_data: dict[str, Any],
+        input_data: dict[str, Any],
+        error_prefix: str,
+    ) -> TASK_STATUS:
+        """Start a pipeline, send data, poll for completion, and return results.
+
+        Args:
+            pipeline_data: Parsed pipeline configuration dict.
+            input_data: Input data to send to the pipeline.
+            error_prefix: Prefix for error messages on failure.
+
+        Returns:
+            The pipeline result from the completed task status.
+
+        Raises:
+            PipelineError: If the pipeline fails to start, times out, or
+                returns a failed status.
+        """
+        token = None
+        try:
+            async with RocketRideClient(
+                f"http://localhost:{ENGINE_PORT}",
+                auth=ENGINE_AUTH_KEY,
+            ) as client:
+                result = await client.use(pipeline=pipeline_data)
+                token = result["token"]
+                logger.info("Pipeline started with token: %s", token)
+
+                await client.send(
+                    token,
+                    json.dumps(input_data),
+                    mimetype="application/json",
+                )
+                logger.info("Data sent to pipeline, polling for completion")
+
+                return await self._poll_for_result(client, token)
+        except PipelineError:
+            raise
+        except Exception as e:
+            msg = f"{error_prefix}: {e}"
+            raise PipelineError(msg) from e
+        finally:
+            if token is not None:
+                try:
+                    async with RocketRideClient(
+                        f"http://localhost:{ENGINE_PORT}",
+                        auth=ENGINE_AUTH_KEY,
+                    ) as client:
+                        await client.terminate(token)
+                except Exception:
+                    logger.warning("Failed to terminate pipeline token")
+
+    async def _poll_for_result(
+        self,
+        client: RocketRideClient,
+        token: str,
+    ) -> TASK_STATUS:
+        """Poll get_task_status until the pipeline completes or times out.
+
+        Args:
+            client: Connected RocketRideClient instance.
+            token: Pipeline task token.
+
+        Returns:
+            The result data from the completed task status.
+
+        Raises:
+            PipelineError: If the pipeline fails or times out.
+        """
+        start_time = time.monotonic()
+        deadline = start_time + PIPELINE_POLL_TIMEOUT
+
+        while time.monotonic() < deadline:
+            status = await client.get_task_status(token)
+            state = status.state
+
+            logger.info(
+                "Pipeline status: %s (%.1fs elapsed)",
+                state,
+                time.monotonic() - start_time,
+            )
+
+            if state == TASK_STATE.COMPLETED.value:
+                logger.info("Pipeline completed successfully")
+                logger.debug("Pipeline result: %s", status)
+                return status
+
+            if status.errors:
+                error = status.errors[-1]
+                msg = f"Pipeline failed: {error}"
+                raise PipelineError(msg)
+
+            if state == TASK_STATE.CANCELLED.value:
+                msg = "Pipeline was cancelled unexpectedly"
+                raise PipelineError(msg)
+
+            await asyncio.sleep(PIPELINE_POLL_INTERVAL)
+
+        elapsed = time.monotonic() - start_time
+        msg = f"Pipeline did not complete within {elapsed:.1f}s"
+        raise PipelineError(msg)
+
     async def run_full_review(
         self,
         diff: str,
@@ -122,45 +230,14 @@ class PipelineRunner:
         if file_context:
             input_data["file_context"] = file_context
 
-        # Write modified pipeline to a temp file for the SDK
-        with tempfile.NamedTemporaryFile(
-            suffix=".pipe.json", delete=False, mode="w", encoding="utf-8"
-        ) as tmp_pipeline:
-            json.dump(pipeline_data, tmp_pipeline)
-        tmp_pipeline_path = Path(tmp_pipeline.name)
-        try:
-
-            token = None
-            try:
-                async with RocketRideClient(
-                    f"http://localhost:{ENGINE_PORT}",
-                    auth=ENGINE_AUTH_KEY,
-                ) as client:
-                    result = await client.use(filepath=str(tmp_pipeline_path))
-                    token = result["token"]
-                    response = await client.send(
-                        token,
-                        json.dumps(input_data),
-                        mimetype="application/json",
-                    )
-            except PipelineError:
-                raise
-            except Exception as e:
-                msg = f"Pipeline execution failed: {e}"
-                raise PipelineError(msg) from e
-            finally:
-                if token is not None:
-                    try:
-                        async with RocketRideClient(
-                            f"http://localhost:{ENGINE_PORT}",
-                            auth=ENGINE_AUTH_KEY,
-                        ) as client:
-                            await client.terminate(token)
-                    except Exception:
-                        logger.warning("Failed to terminate pipeline token")
-        finally:
-            tmp_pipeline_path.unlink(missing_ok=True)
-
+        status = await self._execute_pipeline(
+            pipeline_data, input_data, "Pipeline execution failed"
+        )
+        response = status.model_dump()
+        logger.info(
+            "Full review pipeline response: %s",
+            json.dumps(response, default=str)[:2000],
+        )
         return self._parse_response(response)
 
     def _parse_response(self, response: object) -> tuple[list[AgentReview], list[str]]:
@@ -321,46 +398,14 @@ class PipelineRunner:
         if file_context:
             input_data["file_context"] = file_context
 
-        # Write modified pipeline to a temp file for the SDK
-        with tempfile.NamedTemporaryFile(
-            suffix=".pipe.json", delete=False, mode="w", encoding="utf-8"
-        ) as tmp_pipeline:
-            json.dump(pipeline_data, tmp_pipeline)
-        tmp_pipeline_path = Path(tmp_pipeline.name)
-        try:
-
-            token = None
-            try:
-                async with RocketRideClient(
-                    f"http://localhost:{ENGINE_PORT}",
-                    auth=ENGINE_AUTH_KEY,
-                ) as client:
-                    result = await client.use(filepath=str(tmp_pipeline_path))
-                    token = result["token"]
-                    response = await client.send(
-                        token,
-                        json.dumps(input_data),
-                        mimetype="application/json",
-                    )
-            except PipelineError:
-                raise
-            except Exception as e:
-                msg = f"Conversation reply pipeline failed: {e}"
-                raise PipelineError(msg) from e
-            finally:
-                if token is not None:
-                    try:
-                        async with RocketRideClient(
-                            f"http://localhost:{ENGINE_PORT}",
-                            auth=ENGINE_AUTH_KEY,
-                        ) as client:
-                            await client.terminate(token)
-                    except Exception:
-                        logger.warning(
-                            "Failed to terminate conversation pipeline token"
-                        )
-        finally:
-            tmp_pipeline_path.unlink(missing_ok=True)
+        status = await self._execute_pipeline(
+            pipeline_data, input_data, "Conversation reply pipeline failed"
+        )
+        response = status.model_dump()
+        logger.info(
+            "Conversation pipeline response: %s",
+            json.dumps(response, default=str)[:2000],
+        )
 
         return self._extract_reply(response)
 

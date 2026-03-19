@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -124,11 +124,29 @@ def valid_lane_response() -> dict[str, object]:
     }
 
 
+def _make_task_status(response: object) -> MagicMock:
+    """Create a mock TASK_STATUS that model_dump()s to the response."""
+    from rocketride.types.task import TASK_STATE
+
+    status = MagicMock()
+    status.state = TASK_STATE.COMPLETED.value
+    status.errors = []
+    status.model_dump.return_value = response
+    return status
+
+
 def _make_mock_client(response: object) -> AsyncMock:
-    """Create a mock RocketRideClient that returns the given response."""
+    """Create a mock RocketRideClient that returns the given response.
+
+    The response is wrapped in a completed TASK_STATUS mock to simulate
+    the polling workflow.
+    """
     mock_client = AsyncMock()
     mock_client.use = AsyncMock(return_value={"token": "token-123"})
-    mock_client.send = AsyncMock(return_value=response)
+    mock_client.send = AsyncMock(return_value={"name": "task-id"})
+    mock_client.get_task_status = AsyncMock(
+        return_value=_make_task_status(response),
+    )
     mock_client.terminate = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -427,7 +445,7 @@ class TestConversationReplyPipeline:
 
         with (
             patch("src.pipeline.RocketRideClient", return_value=mock_client),
-            pytest.raises(PipelineError, match="Unexpected conversation response type"),
+            pytest.raises(PipelineError, match="Unexpected conversation.*type"),
         ):
             await runner.run_conversation_reply(
                 agent_node_id="claude-reviewer",
@@ -686,10 +704,10 @@ class TestInjectApiKeys:
         # Capture the pipeline content at call time (before temp file cleanup)
         captured: dict[str, object] = {}
 
-        async def capture_use(*, filepath: str) -> dict[str, str]:
-            captured["pipeline"] = json.loads(
-                Path(filepath).read_text(encoding="utf-8")
-            )
+        async def capture_use(
+            *, pipeline: object = None, **kwargs: object
+        ) -> dict[str, str]:
+            captured["pipeline"] = pipeline
             return {"token": "token-123"}
 
         mock_client.use = AsyncMock(side_effect=capture_use)
@@ -725,10 +743,10 @@ class TestInjectApiKeys:
 
         captured: dict[str, object] = {}
 
-        async def capture_use(*, filepath: str) -> dict[str, str]:
-            captured["pipeline"] = json.loads(
-                Path(filepath).read_text(encoding="utf-8")
-            )
+        async def capture_use(
+            *, pipeline: object = None, **kwargs: object
+        ) -> dict[str, str]:
+            captured["pipeline"] = pipeline
             return {"token": "token-123"}
 
         mock_client.use = AsyncMock(side_effect=capture_use)
