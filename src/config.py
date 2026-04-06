@@ -104,6 +104,13 @@ PIPELINE_POLL_TIMEOUT: float = 1800.0
 MAX_RETRIES: int = 3
 RETRY_BACKOFF_BASE: float = 1.0
 
+# Deduplication thresholds
+DEDUP_LINE_WINDOW: int = 3
+DEDUP_SIMILARITY_THRESHOLD: float = 0.6
+
+# GitHub API timeout
+GITHUB_API_TIMEOUT: float = 30.0
+
 # Maps LLM provider names (as used in pipeline JSON) to env var names for API keys
 LLM_PROVIDER_API_KEY_ENV: dict[str, str] = {
     "llm_anthropic": "INPUT_ANTHROPIC_API_KEY",

@@ -11,13 +11,14 @@ import logging
 from difflib import SequenceMatcher
 from itertools import combinations
 
+from src.config import DEDUP_LINE_WINDOW, DEDUP_SIMILARITY_THRESHOLD
 from src.models import AgentReview, ReviewComment
 
 logger = logging.getLogger(__name__)
 
-# Deduplication thresholds
-LINE_WINDOW: int = 3
-SIMILARITY_THRESHOLD: float = 0.6
+# Re-export for backwards compatibility in tests
+LINE_WINDOW: int = DEDUP_LINE_WINDOW
+SIMILARITY_THRESHOLD: float = DEDUP_SIMILARITY_THRESHOLD
 
 
 def _is_duplicate(a: ReviewComment, b: ReviewComment) -> bool:

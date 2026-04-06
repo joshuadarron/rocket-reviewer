@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 from github import Auth, GithubException, GithubIntegration
 
+from src.config import GITHUB_API_TIMEOUT
 from src.errors import (
     CommentPostingError,
     ConfigurationError,
@@ -79,7 +80,9 @@ class GitHubClient:
         }
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers, timeout=30.0)
+                response = await client.get(
+                    url, headers=headers, timeout=GITHUB_API_TIMEOUT
+                )
                 response.raise_for_status()
                 return response.text
         except httpx.HTTPError as e:
